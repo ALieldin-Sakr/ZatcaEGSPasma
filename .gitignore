@@ -375,3 +375,4 @@ FodyWeavers.xsd
 /ZatcaEGS/ScriptReference.txt
 /ZatcaEGS/Helpers/ZatcaReference.cs
 /ZatcaEGS/UpdateVersion.ps1
+/ZatcaEGS/aws-beanstalk-tools-defaults.json
