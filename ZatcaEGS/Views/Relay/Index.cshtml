@@ -10,8 +10,13 @@
 }
 
 @{
-    var fileContent = TempData["StringFileContent"] as string;
-    var fileName = TempData["StringFileName"] as string;
+    //var fileContent = TempData["StringFileContent"] as string;
+    
+    // Retrieve the byte array of the ZIP file from TempData
+    var zipFileBytes = TempData["ZipFile"] as byte[];
+    var zipFileName = TempData["StringFileName"] as string;
+
+    // Serialize API references for use in JavaScript
     var apiReference = Newtonsoft.Json.JsonConvert.SerializeObject(TempData["ApiReference"]);
     var apiInvoice = Newtonsoft.Json.JsonConvert.SerializeObject(TempData["ApiInvoice"]);
 }
@@ -548,19 +553,40 @@
                 finalizeDownload();
             }
 
+            
             function finalizeDownload() {
-                
+                // Check if there is a message to display (if applicable)
                 if (message !== "") {
                     alert(message);
                 }
 
-                var sfileContent = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(fileContent));
-                const sfileName = '@fileName';
+                // Use the file name from TempData
+                const zipFileName = '@zipFileName';
 
-                if (sfileContent) {
-                    downloadFile(sfileContent, sfileName);
+                // Prepare to download the ZIP file
+                const zipFileBytes = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(zipFileBytes));
+
+                if (zipFileBytes) {
+                    // Convert the byte array to a base64 string
+                    const byteCharacters = atob(zipFileBytes);
+                    const byteNumbers = new Uint8Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+
+                    // Create a Blob from the byte array
+                    const blob = new Blob([byteNumbers], { type: 'application/zip' });
+
+                    // Create a link element to trigger the download
+                    const link = document.createElement('a');
+                    link.href = window.URL.createObjectURL(blob);
+                    link.download = zipFileName; // Set the file name for download
+                    document.body.appendChild(link); // Append link to the body
+                    link.click(); // Programmatically click the link to trigger download
+                    document.body.removeChild(link); // Remove link from the body after download
                 }
             }
+
         });
 
     </script> 

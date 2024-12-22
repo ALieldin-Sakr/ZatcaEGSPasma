@@ -14,13 +14,6 @@
 	</PropertyGroup>
 	
 	<ItemGroup>
-		<None Remove="Resources\ZatcaDataInvoice.xsl" />
-		<None Remove="Resources\ZatcaDataQr.xml" />
-		<None Remove="Resources\ZatcaDataSignature.xml" />
-		<None Remove="Resources\ZatcaDataUbl.xml" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<EmbeddedResource Include="Resources\ZatcaDataUbl.xml" />
 		<EmbeddedResource Include="Resources\ZatcaDataInvoice.xsl" />
 		<EmbeddedResource Include="Resources\ZatcaDataQr.xml" />

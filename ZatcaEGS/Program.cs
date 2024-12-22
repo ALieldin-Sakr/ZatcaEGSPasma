@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Localization;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
+using ZimraEGS.Helpers;
+
+Console.OutputEncoding = System.Text.Encoding.UTF8;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +18,7 @@ var portArg = configuration["p"];
 
 if (portArg != null && int.TryParse(portArg, out int parsedPort))
 {
-    if (parsedPort != 80 || parsedPort != 443 || parsedPort != 0)
+    if (parsedPort != 80 && parsedPort != 443 && parsedPort != 0)
     {
         //Console.WriteLine($"Using port: {parsedPort}");
 
@@ -41,6 +44,20 @@ else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation
 {
     builder.Host.UseSystemd();
 }
+
+string logDirectory = Environment.GetEnvironmentVariable("HOME") != null
+            ? Path.Combine(Environment.GetEnvironmentVariable("HOME"), "LogFiles", "MyApp") // Azure
+            : Path.Combine(AppContext.BaseDirectory, "Logs"); // Local
+
+if (!Directory.Exists(logDirectory))
+{
+    Directory.CreateDirectory(logDirectory);
+}
+
+// Konfigurasi logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddProvider(new FileLoggerProvider(logDirectory, LogLevel.Information));
 
 // Configure JSON options
 builder.Services.Configure<JsonOptions>(options =>

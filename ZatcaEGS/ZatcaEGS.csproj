@@ -10,9 +10,8 @@
     <ServerGarbageCollection>false</ServerGarbageCollection>
   </PropertyGroup>
   <PropertyGroup>
-    <AssemblyVersion>24.10.01.0001</AssemblyVersion>
-    <FileVersion>24.10.01.0001</FileVersion>
-    <UserSecretsId>213d5a12-e059-458b-975f-6ea7605cf393</UserSecretsId>
+    <AssemblyVersion>24.12.17.0001</AssemblyVersion>
+    <FileVersion>24.12.17.0001</FileVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <Optimize>True</Optimize>
@@ -21,26 +20,7 @@
     <Optimize>False</Optimize>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="Views\Disclaimer\**" />
-    <Compile Remove="Views\Wizard\**" />
-    <Content Remove="Views\Disclaimer\**" />
-    <Content Remove="Views\Wizard\**" />
-    <EmbeddedResource Remove="Views\Disclaimer\**" />
-    <EmbeddedResource Remove="Views\Wizard\**" />
-    <None Remove="Views\Disclaimer\**" />
-    <None Remove="Views\Wizard\**" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="Controllers\DisclaimerController.cs" />
-    <Compile Remove="Controllers\WizardController.cs" />
-    <Compile Remove="Helpers\ZatcaReference.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Remove="cfData - Copy.json" />
-    <Content Remove="Views\Relay\Certificate.cshtml" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Remove="ScriptReference.txt" />
+    <Compile Remove="Helpers\RellayToInvoiceMapper.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="cfData.json" />

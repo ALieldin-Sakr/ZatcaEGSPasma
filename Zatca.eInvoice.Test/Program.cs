@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Xml;
 using Zatca.eInvoice;
 using Zatca.eInvoice.Helpers;
 using Zatca.eInvoice.Models;
@@ -576,9 +577,14 @@ class Program
 
                 //Console.WriteLine("\nDecoding Generated QRCode:");
                 //Console.WriteLine();
-                string qrCodeContent = "AW/YtNix2YPYqSDYqtmI2LHZitivINin2YTYqtmD2YbZiNmE2YjYrNmK2Kcg2KjYo9mC2LXZiSDYs9ix2LnYqSDYp9mE2YXYrdiv2YjYr9ipIHwgTWF4aW11bSBTcGVlZCBUZWNoIFN1cHBseSBMVEQCDzMxMTI0MTc1NjEwMDAwMwMABAQ0LjYwBQMwLjYGLCtyUmVaN2NCdDBQZkswSFJDbnVSUnFmSjZSVkVDcXVmenJ3MnJFajJ2cE09B2BNRVVDSUdxTUpEa25HbTVEZURYRGJwZFBPTndreTJGVEl0OGRRaTYyMWcyNndFc0VBaUVBaDU0WHFXK3BIdWVmRXpaQlF6R2xOeE1sOE56Lzk3MVdKNkFRUElTaHNJOD0IWDBWMBAGByqGSM49AgEGBSuBBAAKA0IABNgR76Z9/5pVMvxS2I93dpl7zNt2IiKPw2FzTkLybXPNoIyHlvbZmHlrdxdKtpdd0HqVgyEmGxxnnnflY/wIiHYJRjBEAiAddwmEpulhcWuGz3HsLtQCTF+tzhDZi2yb7ZQ5QvDtRQIgal7XjzSEnui95CkaM1iuApKQYqzXex1YWFinwm8OjyY="; //signedInvoiceResult.Base64QrCode;
+
+                string qrCodeContent = "AQNMVEQCDzM5OTk5OTk5OTkwMDAwMwMTMjAyMi0wOC0xN1QxNzo0MTowOAQGMjMxLjE1BQUzMC4xNQYsWE9wMmRGWEhOd2ltZENEOGpET1oyeWxxdytTQ20vWmxUTlRaZS9DY3U3ST0HYE1FVUNJSEN6UHRySnhrakZqR050WnlPNjY4WlRleHVaOGF2QXF6RlljT2xYeGI5K0FpRUF2QmtpRzNJSHNBYytFaElZZzcrM1F2MzY3M2F2MjU0bUZpd2JWTWttaUJBPQhYMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEVewK7mahU1v9e/72pxgIy7NhJtAQlHf5q13yS91wrjVbI9uxtumMXMG+6pEwbKp4N1yAnLCbwxjbXte4wftybwkTMKYMZCq6bWuS+gJi1q4hwsMARQ=="; //signedInvoiceResult.Base64QrCode;
                 var decodedContent = QrCodeDecoder.DecodeQRCode(qrCodeContent);
                 QrCodeDecoder.PrintDecodedContent(decodedContent);
+
+                //qrCodeContent = "AQNMVEQCDzM5OTk5OTk5OTkwMDAwMwMTMjAyMi0wOC0xN1QxNzo0MTowOAQGMjMxLjE1BQUzMC4xNQYsNnJldnEvVG05MGVQWjV3OEtoT0U4RjBnY01EUXF4SVUraXFvMVlnRHlyQT0HYE1FWUNJUURDdlpQMmF0ZENyeXhpRHVFTEdJM1FXS1BLUS82TTExMlpETVROeS8yZUlRSWhBUHgzSWxtVUNwNWtKaTdpNXc3bUJCK2YvYndibmZYck5QL3p2cHg0RWovcQhYMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEoWCKa0Sa9FIErTOv0uAkC1VIKXxU9nPpx2vlf4yhMejy8c02XJblDq7tPydo8mq0ahOMmNo8gwni7Xt1KT9UeAlHMEUCIQCxP4nIZp1lwlClG3Gt8nIvKKsGi7xXR1Y0K73iPbqgGwIgPYQuDPI4DAQAz0s5ndrojyQOoCkdyxNN1O+Xqmwv61w="; //signedInvoiceResult.Base64QrCode;
+                //decodedContent = QrCodeDecoder.DecodeQRCode(qrCodeContent);
+                //QrCodeDecoder.PrintDecodedContent(decodedContent);
 
             }
             catch (Exception ex)
@@ -586,5 +592,22 @@ class Program
                 Console.WriteLine($"An error occurred: {ex.Message}");
             }
         }
+
+
+    }
+
+    public static (string invoiceHash, string base64QRCode) ExtractInvoiceHashAndBase64QrCode(XmlDocument doc)
+    {
+        XmlNamespaceManager nsmgr = new XmlNamespaceManager(doc.NameTable);
+        nsmgr.AddNamespace("ext", "urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2");
+        nsmgr.AddNamespace("ds", "http://www.w3.org/2000/09/xmldsig#");
+        nsmgr.AddNamespace("cbc", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2");
+        nsmgr.AddNamespace("cac", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2");
+
+        // Extracting specific DigestValue for invoiceSignedData
+        string invoiceHash = doc.SelectSingleNode("//ds:Reference[@Id='invoiceSignedData']/ds:DigestValue", nsmgr)?.InnerText;
+        string base64QRCode = doc.SelectSingleNode("//cac:AdditionalDocumentReference[cbc:ID='QR']/cac:Attachment/cbc:EmbeddedDocumentBinaryObject", nsmgr)?.InnerText;
+
+        return (invoiceHash, base64QRCode);
     }
 }

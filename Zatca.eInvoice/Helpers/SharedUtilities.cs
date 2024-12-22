@@ -15,7 +15,7 @@ namespace Zatca.eInvoice.Helpers
 {
     internal static class SharedUtilities
     {
-        internal static string ObjectToXml(this object obj, XmlSerializerNamespaces namespaces, string filePath = null)
+        internal static string ObjectToXml(this object obj, XmlSerializerNamespaces namespaces) //, string filePath = null)
         {
             XmlSerializer serializer = new(obj.GetType());
 
@@ -37,10 +37,10 @@ namespace Zatca.eInvoice.Helpers
             memoryStream.Position = 0;
             string xmlString = new StreamReader(memoryStream).ReadToEnd().Trim();
 
-            if (!string.IsNullOrEmpty(filePath))
-            {
-                File.WriteAllText(filePath, xmlString);
-            }
+            //if (!string.IsNullOrEmpty(filePath))
+            //{
+            //    File.WriteAllText(filePath, xmlString);
+            //}
 
             return xmlString;
         }

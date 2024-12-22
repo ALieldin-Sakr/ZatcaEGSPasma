@@ -6,7 +6,8 @@ using static ZatcaEGS.Helpers.VATInfoHelper;
 
 namespace ZatcaEGS.Helpers
 {
-    public class RelayToInvoiceMapper
+    public class RelayToInvoiceMapper2
+
     {
         private readonly RelayData _relayData;
         private readonly CertificateInfo _certInfo;
@@ -15,7 +16,7 @@ namespace ZatcaEGS.Helpers
         private readonly string _invoiceCurrencyCode;
         private readonly string _taxCurrencyCode;
 
-        public RelayToInvoiceMapper(RelayData relayData)
+        public RelayToInvoiceMapper2(RelayData relayData)
         {
             _relayData = relayData;
 
@@ -38,7 +39,7 @@ namespace ZatcaEGS.Helpers
                 invoiceType = 381;
             }
 
-            string invoiceSubType = JsonParser.FindStringByGuid(_relayData.InvoiceJson, ManagerCustomField.InvoiceSubTypeGuid, "RefInvoice") ?? "0200000";
+            string invoiceSubType = JsonParser.FindStringByGuid(_relayData.InvoiceJson, ManagerCustomField.InvoiceSubTypeGuid, "RefInvoice") ?? "0100000";
 
             string dateCreated = null;
             string timeCreated = null;
@@ -83,6 +84,7 @@ namespace ZatcaEGS.Helpers
             invoice.AccountingCustomerParty = CreateAccountingCustomerParty();
 
             invoice.Delivery = new Delivery();
+
             invoice.Delivery.ActualDeliveryDate = _managerInvoice.IssueDate.ToString("yyyy-MM-dd");
 
             if (DateAndTime.Year(_managerInvoice.DueDateDate) < 2024)
@@ -100,20 +102,21 @@ namespace ZatcaEGS.Helpers
             invoice.TaxTotal = CalculateTaxTotals().ToArray();
             invoice.LegalMonetaryTotal = CalculateLegalMonetaryTotal();
 
+
             if (invoice?.TaxTotal != null)
             {
-                // Define the codes to check against
                 var validCodes = new[] { "VATEX-SA-EDU", "VATEX-SA-HEA" }; // NAT
 
-                // LINQ to find if any valid exemption reason code exists
-                bool found = invoice.TaxTotal
-                    .Where(taxTotal => taxTotal.TaxSubtotal != null) // Ensure TaxSubtotal is not null
-                    .SelectMany(taxTotal => taxTotal.TaxSubtotal) // Flatten the array of TaxSubtotals
+                bool foundVatEx = invoice.TaxTotal
+                    .Where(taxTotal => taxTotal.TaxSubtotal != null)
+                    .SelectMany(taxTotal => taxTotal.TaxSubtotal)
                     .Any(subtotal => subtotal.TaxCategory != null &&
                                      !string.IsNullOrEmpty(subtotal.TaxCategory.TaxExemptionReasonCode) &&
                                      validCodes.Contains(subtotal.TaxCategory.TaxExemptionReasonCode));
 
-                if (found)
+                bool isExport = invoiceSubType.StartsWith("01") && invoiceSubType[4] == '1'; // OTH
+
+                if (foundVatEx || isExport)
                 {
                     AccountingCustomerParty partyID = invoice.AccountingCustomerParty;
                     PartyTaxInfo partyInfo = _relayData.PartyInfo;
@@ -269,28 +272,28 @@ namespace ZatcaEGS.Helpers
 
             foreach (var line in lines)
             {
-                double percent = (line.TaxCode?.Rate ?? 0) / 100;
-                double invoicedQuantity = Math.Round((line.Qty != 0 ? line.Qty : 1), 4);
-                double discount = line.DiscountAmount * (hasDiscount ? 1 : 0);
-                double unitPrice = ((line.UnitPrice * invoicedQuantity) - discount) / invoicedQuantity;
-                double priceAmount = Math.Round(amountsIncludeTax ? (unitPrice / (1 + percent)) : unitPrice, 4);
-                double lineExtensionAmount = Math.Round(invoicedQuantity * priceAmount, 2);
-                double taxAmount = Math.Round(lineExtensionAmount * percent, 2);
+                LineValue lv = new LineValue(line, hasDiscount, amountsIncludeTax);
 
                 InvoiceLine invoiceLine = new();
 
                 if (line.Item != null)
                 {
                     invoiceLine.ID = new ID((++i).ToString());
-                    invoiceLine.InvoicedQuantity = new InvoicedQuantity(line.Item.UnitName ?? "", invoicedQuantity);
+
+                    invoiceLine.InvoicedQuantity = new InvoicedQuantity(line.Item.UnitName ?? "", lv.XmlQty);
+
+                    invoiceLine.LineExtensionAmount = new Amount(_invoiceCurrencyCode, lv.XmlTaxableAmount);
+
+
+                    invoiceLine.TaxTotal = new TaxTotal
+                    {
+                        TaxAmount = new Amount(_invoiceCurrencyCode, lv.XmlTaxAmount),
+                        RoundingAmount = new Amount(_invoiceCurrencyCode, lv.XmlRoundingAmount)
+                    };
+
                     invoiceLine.Item = new Zatca.eInvoice.Models.Item
                     {
                         Name = line.Item.ItemName ?? line.Item.Name,
-                    };
-                    invoiceLine.LineExtensionAmount = new Amount(_invoiceCurrencyCode, lineExtensionAmount);
-                    invoiceLine.Price = new Price
-                    {
-                        PriceAmount = new Amount(_invoiceCurrencyCode, priceAmount),
                     };
 
                     VATInfo vatInfo = new VATInfo("S", null, null, null);
@@ -312,11 +315,24 @@ namespace ZatcaEGS.Helpers
                         }
                     };
 
-                    invoiceLine.TaxTotal = new TaxTotal
+                    invoiceLine.Price = new Price
                     {
-                        TaxAmount = new Amount(_invoiceCurrencyCode, taxAmount),
-                        RoundingAmount = new Amount(_invoiceCurrencyCode, lineExtensionAmount + taxAmount)
+                        PriceAmount = new Amount(_invoiceCurrencyCode, lv.XmlUnitPrice),
                     };
+
+                    if (hasDiscount)
+                    {
+
+                        AllowanceCharge allowanceCharge = new AllowanceCharge()
+                        {
+                            ChargeIndicator = false,
+                            AllowanceChargeReason = "Discount",
+                            Amount = new Amount(_invoiceCurrencyCode, lv.XmlDiscount)
+                        };
+
+                        invoiceLine.Price.AllowanceCharge = allowanceCharge;
+                    }
+
                 }
                 else
                 {
@@ -324,7 +340,7 @@ namespace ZatcaEGS.Helpers
                     invoiceLine.ID = new ID((++i).ToString());
                     invoiceLine.Price = new Price
                     {
-                        PriceAmount = new Amount(_invoiceCurrencyCode, priceAmount),
+                        PriceAmount = new Amount(_invoiceCurrencyCode, lv.XmlUnitPrice),
                     };
                 }
 
@@ -333,114 +349,6 @@ namespace ZatcaEGS.Helpers
 
             return invoiceLines;
         }
-
-        //private List<TaxTotal> CalculateTaxTotals()
-        //{
-        //    List<Line> lines = _managerInvoice.Lines;
-        //    bool amountsIncludeTax = _managerInvoice.AmountsIncludeTax;
-        //    double exchangeRate = _managerInvoice.ExchangeRate == 0 ? 1 : _managerInvoice.ExchangeRate;
-
-        //    List<TaxTotal> taxTotals = new();
-        //    double totalTaxAmount = 0;
-
-        //    // Dictionary untuk menjumlahkan TaxableAmount, TaxAmount, dan informasi lainnya berdasarkan CategoryID + ExemptReasonCode
-        //    Dictionary<string, (double taxableAmount, double taxAmount, double rate, string exemptReasonCode, string exemptReason)> taxSummaryByCategory = new();
-
-        //    // Loop pertama: menjumlahkan nilai-nilai berdasarkan CategoryID + ExemptReasonCode
-        //    foreach (var line in lines)
-        //    {
-        //        if (line.TaxCode != null)
-        //        {
-        //            double percent = (line.TaxCode?.Rate ?? 0) / 100;
-        //            double invoicedQuantity = Math.Round((line.Qty != 0 ? line.Qty : 1), 4);
-        //            double discount = line.DiscountAmount * (_managerInvoice.Discount ? 1 : 0);
-        //            double unitPrice = ((line.UnitPrice * invoicedQuantity) - discount) / invoicedQuantity;
-        //            double priceAmount = Math.Round(amountsIncludeTax ? (unitPrice / (1 + percent)) : unitPrice, 4);
-        //            double lineExtensionAmount = Math.Round(invoicedQuantity * priceAmount, 2);
-        //            double taxAmount = Math.Round(lineExtensionAmount * percent, 2);
-
-        //            totalTaxAmount += taxAmount;
-
-        //            VATInfo vatInfo = new VATInfo("S", null, null, null);
-        //            double rate = line.TaxCode?.Rate ?? 0;
-
-        //            if (rate == 0)
-        //            {
-        //                string itemTaxCategoryID = line.Item.CustomFields2.Strings[ManagerCustomField.ItemTaxCategoryGuid];
-        //                vatInfo = GetVATInfo(itemTaxCategoryID);
-        //            }
-
-        //            string categoryID = vatInfo.CategoryID;
-        //            string exemptReasonCode = rate == 0 ? vatInfo.ExemptReasonCode : "";
-        //            string key = $"{categoryID}-{exemptReasonCode}";  // Gabungkan CategoryID dan ExemptReasonCode sebagai kunci
-
-        //            // Tambahkan nilai ke dictionary sesuai CategoryID + ExemptReasonCode
-        //            if (!taxSummaryByCategory.ContainsKey(key))
-        //            {
-        //                taxSummaryByCategory[key] = (0, 0, rate, exemptReasonCode, vatInfo.ExemptReason);
-        //            }
-
-        //            // Tambah nilai ke taxableAmount dan taxAmount untuk CategoryID dan ExemptReasonCode yang sama
-        //            var currentSummary = taxSummaryByCategory[key];
-        //            taxSummaryByCategory[key] = (currentSummary.taxableAmount + lineExtensionAmount,
-        //                                         currentSummary.taxAmount + taxAmount,
-        //                                         rate,
-        //                                         exemptReasonCode,
-        //                                         vatInfo.ExemptReason);
-        //        }
-        //    }
-
-        //    // Tax total tanpa subtotals (dengan nilai pajak yang dikonversi)
-        //    TaxTotal taxTotalWithoutSubtotals = new()
-        //    {
-        //        TaxAmount = new Amount(_taxCurrencyCode, totalTaxAmount * exchangeRate)
-        //    };
-        //    taxTotals.Add(taxTotalWithoutSubtotals);
-
-        //    // Loop kedua: membuat TaxSubtotal berdasarkan hasil dari dictionary
-        //    List<TaxSubtotal> taxSubtotals = new();
-
-        //    foreach (var kvp in taxSummaryByCategory)
-        //    {
-        //        string categoryID = kvp.Key.Split('-')[0]; // Ambil CategoryID dari kunci
-        //        string exemptReasonCode = kvp.Value.exemptReasonCode;
-        //        double taxableAmount = kvp.Value.taxableAmount;
-        //        double taxAmount = kvp.Value.taxAmount;
-        //        double rate = kvp.Value.rate;
-        //        string exemptReason = kvp.Value.exemptReason;
-
-        //        TaxSubtotal taxSubtotal = new()
-        //        {
-        //            TaxableAmount = new Amount(_invoiceCurrencyCode, taxableAmount),
-        //            TaxAmount = new Amount(_invoiceCurrencyCode, taxAmount),
-        //            TaxCategory = new TaxCategory
-        //            {
-        //                Percent = rate,
-        //                ID = new ID("UN/ECE 5305", "6", categoryID),
-        //                TaxExemptionReasonCode = rate == 0 ? exemptReasonCode : null,  // Menambahkan TaxExemptionReasonCode
-        //                TaxExemptionReason = rate == 0 ? exemptReason : null,          // Menambahkan TaxExemptionReason
-        //                TaxScheme = new TaxScheme
-        //                {
-        //                    ID = new ID("UN/ECE 5153", "6", "VAT")
-        //                }
-        //            }
-        //        };
-
-        //        taxSubtotals.Add(taxSubtotal);
-        //    }
-
-        //    // Tax total dengan subtotals yang sudah digabungkan
-        //    TaxTotal taxTotalWithSubtotals = new()
-        //    {
-        //        TaxAmount = new Amount(_invoiceCurrencyCode, totalTaxAmount),
-        //        TaxSubtotal = taxSubtotals.ToArray()
-        //    };
-
-        //    taxTotals.Add(taxTotalWithSubtotals);
-
-        //    return taxTotals;
-        //}
-
         private List<TaxTotal> CalculateTaxTotals()
         {
             List<Line> lines = _managerInvoice.Lines;
@@ -539,31 +447,44 @@ namespace ZatcaEGS.Helpers
 
             return taxTotals;
         }
-
         private LegalMonetaryTotal CalculateLegalMonetaryTotal()
         {
             List<Line> lines = _managerInvoice.Lines;
+
             bool amountsIncludeTax = _managerInvoice.AmountsIncludeTax;
+            bool hasDiscount = _managerInvoice.Discount;
+
+            double invoiceTotal = _managerInvoice.InvoiceTotal;
+            double prepaidAmount = 0;
 
             double sumLineExtensionAmount = 0;
             double sumTaxExclusiveAmount = 0;
             double sumTaxInclusiveAmount = 0;
-            double sumAllowanceTotalAmount = 0;
+            //double sumChargeTotalAmount = 0;
+            //double sumAllowanceTotalAmount = 0;
+
+            double payableRoundingAmount = 0;
 
             foreach (var line in lines)
             {
-                double percent = (line.TaxCode?.Rate ?? 0) / 100;
-                double invoicedQuantity = Math.Round((line.Qty != 0 ? line.Qty : 1), 4);
-                double discount = line.DiscountAmount * (_managerInvoice.Discount ? 1 : 0);
-                double unitPrice = ((line.UnitPrice * invoicedQuantity) - discount) / invoicedQuantity;
-                double priceAmount = Math.Round(amountsIncludeTax ? (unitPrice / (1 + percent)) : unitPrice, 4);
-                double lineExtensionAmount = Math.Round(invoicedQuantity * priceAmount, 2);
-                double taxAmount = Math.Round(lineExtensionAmount * percent, 2);
+                LineValue lv = new LineValue(line, hasDiscount, amountsIncludeTax);
 
-                sumLineExtensionAmount += lineExtensionAmount;
-                sumTaxExclusiveAmount += lineExtensionAmount;
-                sumTaxInclusiveAmount += lineExtensionAmount + taxAmount;
-                //sumAllowanceTotalAmount += discount;
+                sumLineExtensionAmount += lv.XmlTaxableAmount;
+                sumTaxExclusiveAmount += lv.XmlTaxableAmount;
+                sumTaxInclusiveAmount += lv.XmlRoundingAmount;
+
+                // Document Level AlowanceCharge
+                //sumAllowanceTotalAmount +=0;
+                //sumChargeTotalAmount +=0;
+
+            }
+
+
+            invoiceTotal -= prepaidAmount;
+
+            if (_managerInvoice.InvoiceTotal > 0)
+            {
+                payableRoundingAmount = invoiceTotal - sumTaxInclusiveAmount;
             }
 
             return new LegalMonetaryTotal
@@ -571,11 +492,11 @@ namespace ZatcaEGS.Helpers
                 LineExtensionAmount = new Amount(_invoiceCurrencyCode, sumLineExtensionAmount),
                 TaxExclusiveAmount = new Amount(_invoiceCurrencyCode, sumTaxExclusiveAmount),
                 TaxInclusiveAmount = new Amount(_invoiceCurrencyCode, sumTaxInclusiveAmount),
-                AllowanceTotalAmount = new Amount(_invoiceCurrencyCode, sumAllowanceTotalAmount),
+                //AllowanceTotalAmount = new Amount(_invoiceCurrencyCode, sumAllowanceTotalAmount),
                 //ChargeTotalAmount = new Amount(_invoiceCurrencyCode, 0),
-                PrepaidAmount = new Amount(_invoiceCurrencyCode, 0),
-                //PayableRoundingAmount = new Amount(_invoiceCurrencyCode,0),
-                PayableAmount = new Amount(_invoiceCurrencyCode, sumTaxInclusiveAmount)
+                PrepaidAmount = new Amount(_invoiceCurrencyCode, prepaidAmount),
+                PayableRoundingAmount = payableRoundingAmount != 0 ? new Amount(_invoiceCurrencyCode, payableRoundingAmount) : null,
+                PayableAmount = new Amount(_invoiceCurrencyCode, invoiceTotal)
             };
         }
     }

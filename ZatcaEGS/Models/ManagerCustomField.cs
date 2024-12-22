@@ -9,8 +9,8 @@
 
         // If the tax exemption reason code (BT-121) is equal to VATEX-SA-EDU or VATEX-SA-HEA, then the other buyer ID (BT-46) is mandatory  and must be national ID (BT-46-1 = NAT)
 
-        //public const string IdentificationScheme = "a1b2c3d4-e5f6-4abc-8def-abcdef000021";
-        //public const string IdentificationID = "a1b2c3d4-e5f6-4abc-8def-abcdef000022";
+        public const string IdentificationScheme = "a1b2c3d4-e5f6-4abc-8def-abcdef000021";
+        public const string IdentificationID = "a1b2c3d4-e5f6-4abc-8def-abcdef000022";
 
         public const string StreetName = "a1b2c3d4-e5f6-4abc-8def-abcdef000004";
         public const string BuildingNumber = "a1b2c3d4-e5f6-4abc-8def-abcdef000005";
@@ -31,12 +31,9 @@
 
         public const string DateCreatedGuid = "a1b2c3d4-e5f6-4abc-8def-abcdef000020";
 
-
-
-
         public const string ItemTaxCategoryGuid = "a1b2c3d4-e5f6-4abc-8def-abcdef000019";
 
-        //public const string FolderReferenceGuid = "a1b2c3d4-e5f6-4abc-8def-abcdef000909";
+        public const string EgsVersionGuid = "a1b2c3d4-e5f6-4abc-8def-abcdef009999";
 
     }
 }

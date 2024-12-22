@@ -29,7 +29,7 @@
         "Position": 101,
         "ShowAtTheTop": false,
         "Size": "Large",
-        "Description": "<div id=\"BusinesCF\" style=\"display: none;\"><script>window.onload=()=>{const customFields=[{labelText:'Zatca Certificate Info'},{labelText:'Last ICV'},{labelText:'Last PIH'}];const vModelForm=document.getElementById('v-model-form');console.log('vModelForm:',vModelForm);if(vModelForm){customFields.forEach(field=>{const labels=vModelForm.querySelectorAll('label');labels.forEach(label=>{if(label.textContent.trim()===field.labelText){console.log('Found label:',field.labelText);const formGroup=label.closest('.form-group');if(formGroup){const inputs=formGroup.querySelectorAll('input,textarea');console.log('Found inputs:',inputs);inputs.forEach(input=>{input.readOnly=true;console.log('Set input to readOnly:',input);});}}});});}const selfDeletingContainer=document.getElementById('BusinesCF');if(selfDeletingContainer){selfDeletingContainer.remove();}};</script></div>",
+        "Description": "<div id=\"BusinesCF\" style=\"display: none;\"><script>window.onload=()=>{const customFields=[{labelText:'Zatca Certificate Info'},{labelText:'Last ICV'},{labelText:'Last PIH'}, {labelText:'EGS Version'}];const vModelForm=document.getElementById('v-model-form');console.log('vModelForm:',vModelForm);if(vModelForm){customFields.forEach(field=>{const labels=vModelForm.querySelectorAll('label');labels.forEach(label=>{if(label.textContent.trim()===field.labelText){console.log('Found label:',field.labelText);const formGroup=label.closest('.form-group');if(formGroup){const inputs=formGroup.querySelectorAll('input,textarea');console.log('Found inputs:',inputs);inputs.forEach(input=>{input.readOnly=true;console.log('Set input to readOnly:',input);});}}});});}const selfDeletingContainer=document.getElementById('BusinesCF');if(selfDeletingContainer){selfDeletingContainer.remove();}};</script></div>",
         "Type": "ParagraphText"
       }
     },
@@ -64,6 +64,60 @@
         "Position": 103,
         "ShowAtTheTop": false,
         "Size": "Large",
+        "Type": "SingleLineText"
+      }
+    },
+    {
+      "apipath": "/text-custom-field-form",
+      "data": {
+        "DisplayOnView": false,
+        "Inactive": false,
+        "Key": "a1b2c3d4-e5f6-4abc-8def-abcdef009999",
+        "Name": "EGS Version",
+        "OptionsForDropdownList": null,
+        "Placement": [
+          "38cf4712-6e95-4ce1-b53a-bff03edad273"
+        ],
+        "Position": 104,
+        "ShowAtTheTop": false,
+        "Size": "Small",
+        "Type": "SingleLineText"
+      }
+    },
+    {
+      "apipath": "/text-custom-field-form",
+      "data": {
+        "Description": null,
+        "DisplayOnView": false,
+        "Inactive": false,
+        "Key": "a1b2c3d4-e5f6-4abc-8def-abcdef000021",
+        "Name": "Party Identification SchemeID",
+        "OptionsForDropdownList": "TIN\nCRN\nMOM\nMLS\n700\nSAG\nNAT\nGCC\nIQA\nPAS\nOTH",
+        "Placement": [
+          "ec37c11e-2b67-49c6-8a58-6eccb7dd75ee",
+          "6d2dc48d-2053-4e45-8330-285ebd431242"
+        ],
+        "Position": 102,
+        "ShowAtTheTop": false,
+        "Size": "Large",
+        "Type": "DropdownList"
+      }
+    },
+    {
+      "apipath": "/text-custom-field-form",
+      "data": {
+        "DisplayOnView": false,
+        "Inactive": false,
+        "Key": "a1b2c3d4-e5f6-4abc-8def-abcdef000022",
+        "Name": "Party Identification ID",
+        "OptionsForDropdownList": null,
+        "Placement": [
+          "ec37c11e-2b67-49c6-8a58-6eccb7dd75ee",
+          "6d2dc48d-2053-4e45-8330-285ebd431242"
+        ],
+        "Position": 103,
+        "ShowAtTheTop": false,
+        "Size": "Small",
         "Type": "SingleLineText"
       }
     },
@@ -240,9 +294,7 @@
         "OptionsForDropdownList": null,
         "Placement": [
           "ad12b60b-23bf-4421-94df-8be79cef533e",
-          "274fc6d0-2eac-43d0-8286-79c856e644aa",
-          "245e5943-0092-409d-96ae-e2ee10eac75b",
-          "58b9eb90-f6b8-4abc-8ea1-12fd77b8336e"
+          "245e5943-0092-409d-96ae-e2ee10eac75b"
         ],
         "Position": 113,
         "ShowAtTheTop": false,
@@ -261,9 +313,7 @@
         "OptionsForDropdownList": "10 | In cash\n30 | Credit\n42 | Payment to bank account\n48 | Bank card\n1 | Instrument not defined (Free text)",
         "Placement": [
           "ad12b60b-23bf-4421-94df-8be79cef533e",
-          "274fc6d0-2eac-43d0-8286-79c856e644aa",
-          "245e5943-0092-409d-96ae-e2ee10eac75b",
-          "58b9eb90-f6b8-4abc-8ea1-12fd77b8336e"
+          "245e5943-0092-409d-96ae-e2ee10eac75b"
         ],
         "Position": 114,
         "ShowAtTheTop": false,
@@ -281,8 +331,7 @@
         "Name": "Instruction Note",
         "OptionsForDropdownList": null,
         "Placement": [
-          "245e5943-0092-409d-96ae-e2ee10eac75b",
-          "274fc6d0-2eac-43d0-8286-79c856e644aa"
+          "245e5943-0092-409d-96ae-e2ee10eac75b"
         ],
         "Position": 115,
         "ShowAtTheTop": false,
@@ -301,9 +350,7 @@
         "OptionsForDropdownList": null,
         "Placement": [
           "ad12b60b-23bf-4421-94df-8be79cef533e",
-          "274fc6d0-2eac-43d0-8286-79c856e644aa",
-          "245e5943-0092-409d-96ae-e2ee10eac75b",
-          "58b9eb90-f6b8-4abc-8ea1-12fd77b8336e"
+          "245e5943-0092-409d-96ae-e2ee10eac75b"
         ],
         "Position": 116,
         "ShowAtTheTop": false,
@@ -322,9 +369,7 @@
         "OptionsForDropdownList": null,
         "Placement": [
           "ad12b60b-23bf-4421-94df-8be79cef533e",
-          "274fc6d0-2eac-43d0-8286-79c856e644aa",
-          "245e5943-0092-409d-96ae-e2ee10eac75b",
-          "58b9eb90-f6b8-4abc-8ea1-12fd77b8336e"
+          "245e5943-0092-409d-96ae-e2ee10eac75b"
         ],
         "Position": 117,
         "ShowAtTheTop": false,
@@ -343,9 +388,7 @@
         "OptionsForDropdownList": null,
         "Placement": [
           "ad12b60b-23bf-4421-94df-8be79cef533e",
-          "274fc6d0-2eac-43d0-8286-79c856e644aa",
-          "245e5943-0092-409d-96ae-e2ee10eac75b",
-          "58b9eb90-f6b8-4abc-8ea1-12fd77b8336e"
+          "245e5943-0092-409d-96ae-e2ee10eac75b"
         ],
         "Position": 118,
         "ShowAtTheTop": false,
@@ -384,9 +427,7 @@
         "OptionsForDropdownList": null,
         "Placement": [
           "ad12b60b-23bf-4421-94df-8be79cef533e",
-          "274fc6d0-2eac-43d0-8286-79c856e644aa",
-          "245e5943-0092-409d-96ae-e2ee10eac75b",
-          "58b9eb90-f6b8-4abc-8ea1-12fd77b8336e"
+          "245e5943-0092-409d-96ae-e2ee10eac75b"
         ],
         "Position": 120,
         "ShowAtTheTop": false,

@@ -97,17 +97,15 @@ namespace Zatca.eInvoice
                 if (InvoiceObject.InvoiceTypeCode.Name.StartsWith("02"))
                 {
                     byte[] certificateBytes = Convert.FromBase64String(X509CertificateContent);
-                    //byte[] certificateBytes = Encoding.UTF8.GetBytes(X509CertificateContent); // not work in WSL
                     X509Certificate2 parsedCertificate = new(certificateBytes);
 
                     string SignatureTimestamp = DateTime.Now.ToString("yyyy-MM-dd'T'HH:mm:ss");
-                    //string PublicKeyHashing = Convert.ToBase64String(SharedUtilities.HashSha256(X509CertificateContent));
                     string PublicKeyHashing = Convert.ToBase64String(Encoding.UTF8.GetBytes(SharedUtilities.HashSha256AsString(X509CertificateContent)));
                     string IssuerName = parsedCertificate.IssuerName.Name;
                     string SerialNumber = SharedUtilities.GetSerialNumberForCertificateObject(parsedCertificate);
                     string SignedPropertiesHash = SharedUtilities.GetSignedPropertiesHash(SignatureTimestamp, PublicKeyHashing, IssuerName, SerialNumber);
 
-                    Console.WriteLine($"{IssuerName} - {SerialNumber} - {SignedPropertiesHash}");
+                    //Console.WriteLine($"{IssuerName} - {SerialNumber} - {SignedPropertiesHash}");
 
                     string SignatureValue = SharedUtilities.GetDigitalSignature(InvoiceHash, EcSecp256k1Privkeypem);
 

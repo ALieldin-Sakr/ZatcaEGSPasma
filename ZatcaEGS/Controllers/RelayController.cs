@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.IO.Compression;
 using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -15,6 +16,14 @@ namespace ZatcaEGS.Controllers
     public class RelayController : Controller
     {
         private readonly HttpClient _httpClient = new();
+
+        private readonly ILogger<RelayController> _logger;
+
+        public RelayController(ILogger<RelayController> logger)
+        {
+            _logger = logger;
+        }
+
 
         [HttpPost("relay")]
         public async Task<IActionResult> ProcessFormData([FromForm] Dictionary<string, string> formData)
@@ -36,6 +45,8 @@ namespace ZatcaEGS.Controllers
                     });
                 }
 
+                _logger.LogInformation($"{relayData.Api} - {HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown"} - {relayData.EnvironmentType}");
+
                 //Check Expired Certificate
                 try
                 {
@@ -55,7 +66,6 @@ namespace ZatcaEGS.Controllers
                     Console.WriteLine(ex.ToString());
                 }
 
-
                 bool hasTokenSecret = relayData.HasTokenSecret;
 
                 if (hasTokenSecret && !string.IsNullOrEmpty(certInfo.ApiSecret))
@@ -63,6 +73,25 @@ namespace ZatcaEGS.Controllers
                     var businessDetails = relayData.BusinessDetails;
                     businessDetails = JsonParser.RemoveJsonField(businessDetails, ManagerCustomField.TokenInfoGuid);
 
+                    var svm = new SetupViewModel
+                    {
+                        Referrer = relayData.Referrer,
+                        BusinessDetails = relayData.BusinessDetails,
+                        BusinessDetailsJson = JsonConvert.SerializeObject(businessDetails),
+                        Api = formData.GetValueOrDefault("Api"),
+                        Token = formData.GetValueOrDefault("Token"),
+                    };
+
+                    TempData["SetupViewModel"] = JsonConvert.SerializeObject(svm);
+                    return RedirectToAction("UpdateBusinessData", "Setup");
+                }
+
+                //Check if Need Update CustomFields
+
+                if (relayData.EgsVersion <= 2410190001) {
+
+                    var businessDetails = relayData.BusinessDetails;
+                    businessDetails = JsonParser.ModifyStringInEditData(businessDetails,"", ManagerCustomField.EgsVersionGuid,VersionHelper.GetVersion());
                     var svm = new SetupViewModel
                     {
                         Referrer = relayData.Referrer,
@@ -89,7 +118,6 @@ namespace ZatcaEGS.Controllers
                     return View("Info", relayViewModel);
                 }
 
-
                 string zatcaUUID = await GenerateZatcaUUID(relayData);
                 relayData.ZatcaUUID = zatcaUUID;
 
@@ -101,8 +129,8 @@ namespace ZatcaEGS.Controllers
                 int icv = relayData.LastICV + 1;
 
                 var amount = invoiceObject.LegalMonetaryTotal.TaxExclusiveAmount.NumericValue;
-                var totalAmount = invoiceObject.LegalMonetaryTotal.TaxInclusiveAmount.NumericValue;
-                var taxAmount = totalAmount - amount;
+                var totalAmount = invoiceObject.LegalMonetaryTotal.PayableAmount.NumericValue; //.TaxInclusiveAmount.NumericValue;
+                var taxAmount = invoiceObject.LegalMonetaryTotal.TaxInclusiveAmount.NumericValue - amount;
 
                 ApprovedInvoice approvedInvoice = new()
                 {
@@ -123,7 +151,7 @@ namespace ZatcaEGS.Controllers
                     TotalAmount = totalAmount,
 
                     Base64QrCode = signedInvoiceResult.Base64QrCode,
-                    XmlFileName = signedInvoiceResult.XmlFileName,
+                    XmlFileName = signedInvoiceResult.XmlFileName.Replace(".xml", "") + $"_{(int)certInfo.EnvironmentType}.xml",
                     Referrer = relayData.Referrer,
                     CallBack = relayData.Callback,
                     ICV = relayData.LastICV + 1,
@@ -139,9 +167,9 @@ namespace ZatcaEGS.Controllers
                 return View("Index", approvedInvoice);
 
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                //_logger.LogError(ex, "Error processing form data");
+                _logger.LogError(ex, "Kesalahan saat memproses relay data");
                 var errorViewModel = new ErrorViewModel
                 {
                     ErrorMessage = "Please review the Device Settings in the EGS application to ensure it matches your business data setup.",
@@ -176,7 +204,7 @@ namespace ZatcaEGS.Controllers
 
         private static async Task<Invoice> GenerateInvoiceObject(RelayData relayData)
         {
-            var mapper = new RelayToInvoiceMapper(relayData);
+            var mapper = new RelayToInvoiceMapper2(relayData);
             return await Task.Run(() => mapper.GenerateInvoiceObject());
         }
 
@@ -330,7 +358,7 @@ namespace ZatcaEGS.Controllers
         private static async Task ProcessClearedInvoice(ApprovedInvoice model, ServerResult apiResponse)
         {
             var clearedInvoiceXml = Encoding.UTF8.GetString(Convert.FromBase64String(apiResponse.ClearedInvoice));
-            //model.Base64Invoice = apiResponse.ClearedInvoice;
+            model.Base64Invoice = apiResponse.ClearedInvoice;
 
             XmlSerializer serializer = new(typeof(Invoice));
 
@@ -370,7 +398,17 @@ namespace ZatcaEGS.Controllers
             model.Timestamp = DateTime.Now;
         }
 
-        private void PrepareTempData(ApprovedInvoice model, CertificateInfo certInfo)
+
+        private static void HandleUnsuccessfulResponse(ApprovedInvoice model, CertificateInfo certInfo, HttpResponseMessage response, string resultContent, bool IsClearance)
+        {
+            var apiBadResponse = JsonConvert.DeserializeObject<ApiBadResponse>(resultContent);
+            apiBadResponse.RequestUri = IsClearance ? certInfo.ClearanceUrl : certInfo.ReportingUrl;
+            apiBadResponse.RequestType = IsClearance ? "Invoice Clearance" : "Invoice Reporting";
+            apiBadResponse.StatusCode = $"{(int)response.StatusCode}-{response.StatusCode}";
+            model.ServerResult = JsonConvert.SerializeObject(apiBadResponse, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+        }
+
+        private void PrepareTempDataold(ApprovedInvoice model, CertificateInfo certInfo)
         {
 
             string approvalStatus = model.ApprovalStatus.Contains("NOT") ? "REJECTED" : model.ApprovalStatus;
@@ -420,16 +458,6 @@ namespace ZatcaEGS.Controllers
             TempData["ApiInvoice"] = apiInvoice;
         }
 
-        private static void HandleUnsuccessfulResponse(ApprovedInvoice model, CertificateInfo certInfo,
-            HttpResponseMessage response, string resultContent, bool IsClearance)
-        {
-            var apiBadResponse = JsonConvert.DeserializeObject<ApiBadResponse>(resultContent);
-            apiBadResponse.RequestUri = IsClearance ? certInfo.ClearanceUrl : certInfo.ReportingUrl;
-            apiBadResponse.RequestType = IsClearance ? "Invoice Clearance" : "Invoice Reporting";
-            apiBadResponse.StatusCode = $"{(int)response.StatusCode}-{response.StatusCode}";
-            model.ServerResult = JsonConvert.SerializeObject(apiBadResponse, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
-        }
-
         private static string GenerateInvoiceInfo(ApprovedInvoice model)
         {
             string InvoiceInfo = $"ManagerUUID: \n{model.ManagerUUID}\n\n";
@@ -451,7 +479,8 @@ namespace ZatcaEGS.Controllers
             InvoiceInfo += $"ICV: \n{model.ICV}\n\n";
             InvoiceInfo += $"InvoiceHash: \n{model.InvoiceHash}\n\n";
             InvoiceInfo += $"ZatcaUUID: \n{model.ZatcaUUID}\n\n";
-            InvoiceInfo += $"Base64Invoice: \n{model.Base64Invoice}\n\n\n";
+            InvoiceInfo += $"Base64Invoice: \n{model.Base64Invoice}\n\n";
+            InvoiceInfo += $"Base64QrCode: \n{model.Base64QrCode}\n\n\n";
 
             var formattedJson = JsonConvert.SerializeObject(JsonConvert.DeserializeObject(model.ServerResult), Formatting.Indented);
             InvoiceInfo += $"ServerResult: \n{formattedJson}\n\n\n";
@@ -460,6 +489,78 @@ namespace ZatcaEGS.Controllers
 
             return InvoiceInfo;
         }
+
+        private void PrepareTempData(ApprovedInvoice model, CertificateInfo certInfo)
+        {
+            string approvalStatus = model.ApprovalStatus.Contains("NOT") ? "REJECTED" : model.ApprovalStatus;
+
+            model.EditData = JsonParser.ModifyStringInEditData(model.EditData, model.ManagerUUID, ManagerCustomField.ApprovedInvoiceGuid, approvalStatus);
+            model.EditData = JsonParser.ModifyStringInEditData(model.EditData, model.ManagerUUID, ManagerCustomField.ZatcaUUIDGuid, model.ZatcaUUID);
+
+            model.EditData = JsonParser.ModifyStringInEditData(model.EditData, "BusinessDetails", ManagerCustomField.LastIcvGuid, model.ICV.ToString());
+            model.EditData = JsonParser.ModifyStringInEditData(model.EditData, "BusinessDetails", ManagerCustomField.LastPihGuid, model.InvoiceHash);
+
+            if (!approvalStatus.Equals("REJECTED"))
+            {
+                model.EditData = JsonParser.ModifyStringInEditData(model.EditData, model.ManagerUUID, ManagerCustomField.QrCodeGuid, model.Base64QrCode);
+            }
+            
+            _logger.LogInformation($"{certInfo.ApiEndpoint} - {HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown"} - {model.EnvironmentType} - {approvalStatus}");
+
+            TempData.Clear();
+
+            string sanitizedReference = new(model.Reference.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
+            string fileName = model.XmlFileName.Replace(".xml", "");
+
+            string fileContent = GenerateInvoiceInfo(model);
+            string xmlContent = Encoding.UTF8.GetString(Convert.FromBase64String(model.Base64Invoice)); ;
+
+            using (var memoryStream = new MemoryStream())
+            {
+                using (var zipArchive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+                {
+                    var textEntry = zipArchive.CreateEntry(fileName + ".txt", CompressionLevel.Optimal);
+                    using (var entryStream = textEntry.Open())
+                    using (var writer = new StreamWriter(entryStream))
+                    {
+                        writer.Write(fileContent);
+                    }
+
+                    var xmlEntry = zipArchive.CreateEntry(fileName + ".xml", CompressionLevel.Optimal);
+                    using (var entryStream = xmlEntry.Open())
+                    using (var writer = new StreamWriter(entryStream))
+                    {
+                        writer.Write(xmlContent);
+                    }
+                }
+
+                TempData["ZipFile"] = memoryStream.ToArray();
+                TempData["StringFileName"] = fileName + ".zip";
+            }
+
+            var businessDetailsPayload = JsonParser.FindValueByKey(JObject.Parse(model.EditData), "BusinessDetails");
+
+            var apiReference = new
+            {
+                ApiUrl = $"{certInfo.ApiEndpoint}/business-details-form/38cf4712-6e95-4ce1-b53a-bff03edad273",
+                SecretKey = certInfo.ApiSecret,
+                Payload = businessDetailsPayload
+            };
+
+            TempData["ApiReference"] = apiReference;
+
+            var invoiceData = JsonParser.FindValueByKey(JObject.Parse(model.EditData), model.ManagerUUID)?.ToString();
+
+            var apiInvoice = new
+            {
+                ApiUrl = UrlHelper.ConstructInvoiceApiUrl(model.Referrer, model.ManagerUUID),
+                SecretKey = certInfo.ApiSecret,
+                Payload = invoiceData
+            };
+
+            TempData["ApiInvoice"] = apiInvoice;
+        }
+
     }
 
 }

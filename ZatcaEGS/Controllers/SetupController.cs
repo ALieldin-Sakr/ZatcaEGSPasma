@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using System.IO.Compression;
 using System.Net.Http.Headers;
+using System.Security.Authentication;
 using System.Text;
 using Zatca.eInvoice;
 using Zatca.eInvoice.Helpers;
@@ -16,8 +17,11 @@ namespace ZatcaEGS.Controllers
         private readonly CsrGenerator _csrGenerator;
         private readonly HttpClient _httpClient = new();
 
-        public SetupController()
+        private readonly ILogger<SetupController> _logger;
+
+        public SetupController(ILogger<SetupController> logger)
         {
+            _logger = logger;
             _csrGenerator = new CsrGenerator();
         }
 
@@ -32,6 +36,9 @@ namespace ZatcaEGS.Controllers
             }
 
             var viewModel = JsonConvert.DeserializeObject<SetupViewModel>(svmJson);
+
+            _logger.LogInformation($"{viewModel.Api} - {HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown"} - {viewModel.CertificateInfo.EnvironmentType}");
+
             return View(viewModel); // This will render Views/Setup/UpdateBusinessData.cshtml
         }
 
@@ -58,6 +65,8 @@ namespace ZatcaEGS.Controllers
                 EnvironmentType = EnvironmentType.NonProduction,
                 RelayURL = UrlHelper.GetRelayUrl(viewModel.Referrer)
             };
+
+            _logger.LogInformation($"{viewModel.Api} - {HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown"} - {viewModel.CertificateInfo.EnvironmentType}");
 
             viewModel.CertificateInfo = model;
 
@@ -315,6 +324,7 @@ namespace ZatcaEGS.Controllers
                 string resultContent = await response.Content.ReadAsStringAsync();
                 ZatcaResultDto zatcaResult = JsonConvert.DeserializeObject<ZatcaResultDto>(resultContent);
 
+                //Console.WriteLine(resultContent);
 
                 var pcsidResult = new PCSIDResultDto
                 {
@@ -332,7 +342,7 @@ namespace ZatcaEGS.Controllers
             }
         }
 
-        public async Task<string> PostComplianceCheck(string ComplianceCheckUrl, ZatcaRequestApi RequestApi, string CCSIDBinaryToken, string CCSIDSecret)
+        public async Task<string> PostComplianceCheck_Old(string ComplianceCheckUrl, ZatcaRequestApi RequestApi, string CCSIDBinaryToken, string CCSIDSecret)
         {
             try
             {
@@ -352,6 +362,7 @@ namespace ZatcaEGS.Controllers
                 var resultContent = await response.Content.ReadAsStringAsync();
                 var apiResponse = JsonConvert.DeserializeObject<ServerResult>(resultContent);
 
+                //Console.WriteLine(resultContent);
 
                 var settings = new JsonSerializerSettings
                 {
@@ -360,6 +371,7 @@ namespace ZatcaEGS.Controllers
                 };
 
                 var jsonResult = JsonConvert.SerializeObject(apiResponse, settings);
+
                 //Console.WriteLine(jsonResult);
 
                 if (apiResponse.ClearanceStatus == "CLEARED" || apiResponse.ReportingStatus == "REPORTED")
@@ -375,5 +387,77 @@ namespace ZatcaEGS.Controllers
                 return null;
             }
         }
+
+        public async Task<string> PostComplianceCheck(string ComplianceCheckUrl, ZatcaRequestApi RequestApi, string CCSIDBinaryToken, string CCSIDSecret)
+        {
+            const int maxRetryAttempts = 3; // Maximum retry attempts
+            const int delayMilliseconds = 1000; // Initial delay time in milliseconds
+            int retryCount = 0; // Tracks the retry attempts
+
+            while (retryCount < maxRetryAttempts)
+            {
+                try
+                {
+                    // Clear and set headers for each retry attempt
+                    _httpClient.DefaultRequestHeaders.Clear();
+                    _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                    _httpClient.DefaultRequestHeaders.AcceptLanguage.Add(new StringWithQualityHeaderValue("en"));
+                    _httpClient.DefaultRequestHeaders.Add("Accept-Version", "V2");
+                    _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic",
+                        Convert.ToBase64String(Encoding.ASCII.GetBytes($"{CCSIDBinaryToken}:{CCSIDSecret}")));
+
+                    // Serialize the request
+                    var jsonContent = JsonConvert.SerializeObject(RequestApi);
+                    var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+                    // Attempt to send the request
+                    var response = await _httpClient.PostAsync(ComplianceCheckUrl, content);
+                    var resultContent = await response.Content.ReadAsStringAsync();
+                    var apiResponse = JsonConvert.DeserializeObject<ServerResult>(resultContent);
+
+                    //var settings = new JsonSerializerSettings
+                    //{
+                    //    NullValueHandling = NullValueHandling.Ignore,
+                    //    Formatting = Formatting.Indented
+                    //};
+                    //var jsonResult = JsonConvert.SerializeObject(apiResponse, settings);
+                    // Console.WriteLine(jsonResult); // For debugging
+
+                    // Check response for success conditions
+                    if (apiResponse.ClearanceStatus == "CLEARED" || apiResponse.ReportingStatus == "REPORTED")
+                    {
+                        return RequestApi.invoiceHash;
+                    }
+
+                    return null; // Unsuccessful, return null
+                }
+                catch (Exception ex) when (ex is HttpRequestException || ex is TimeoutException)
+                {
+                    // Network-related exceptions can be retried
+                    retryCount++;
+                    Console.WriteLine($"Network attempt {retryCount} failed: {ex.Message}");
+                    if (retryCount >= maxRetryAttempts)
+                    {
+                        return null;
+                    }
+                    await Task.Delay(delayMilliseconds * (int)Math.Pow(2, retryCount));
+                }
+                catch (JsonSerializationException ex)
+                {
+                    // Serialization issues should not be retried
+                    Console.WriteLine("Serialization error: " + ex.Message);
+                    return null;
+                }
+                catch (AuthenticationException ex)
+                {
+                    // Authentication errors should not be retried
+                    Console.WriteLine("Authentication error: " + ex.Message);
+                    return null;
+                }
+
+            }
+            return null;
+        }
+
     }
 }

@@ -29,7 +29,7 @@ namespace Zatca.eInvoice.Models
         public Price Price { get; set; }
 
         [XmlElement(ElementName = "AllowanceCharge", Namespace = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")]
-        public Amount AllowanceCharge { get; set; }
+        public AllowanceCharge AllowanceCharge { get; set; }
     }
 
     public class InvoicedQuantity

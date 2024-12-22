@@ -27,6 +27,8 @@ namespace ZatcaEGS.Models
 
         public string DateCreated { get; set; }
         public bool HasTokenSecret { get; set; }
+        public long EgsVersion { get; set; }
+        public double InvoiceTotal { get; set; } = 0;
 
         public RelayData() { }
 
@@ -39,6 +41,10 @@ namespace ZatcaEGS.Models
             Api = formData.GetValueOrDefault("Api");
             Token = formData.GetValueOrDefault("Token");
 
+            // for rounding payable amount
+            string invoiceView = formData.GetValueOrDefault("View");
+            InvoiceTotal = ParseTotalValue(invoiceView);
+
             string DataString = JsonParser.UpdateJsonGuidValue(Data, ManagerCustomField.ZatcaUUIDGuid);
 
             var (businessDetails, dynamicParts) = JsonParser.ParseJson(DataString);
@@ -48,6 +54,9 @@ namespace ZatcaEGS.Models
             var certString = JsonParser.FindStringByGuid(businessDetails, ManagerCustomField.CertificateInfoGuid);
 
             HasTokenSecret = !string.IsNullOrEmpty(JsonParser.FindStringByGuid(businessDetails, ManagerCustomField.TokenInfoGuid));
+
+            var version = JsonParser.FindStringByGuid(businessDetails, ManagerCustomField.EgsVersionGuid);
+            EgsVersion = VersionHelper.GetNumberOnly(JsonParser.FindStringByGuid(businessDetails, ManagerCustomField.EgsVersionGuid));
 
             if (!string.IsNullOrEmpty(certString))
             {
@@ -85,11 +94,13 @@ namespace ZatcaEGS.Models
                 InvoiceJson = JsonParser.ReplaceGuidValuesInJson(InvoiceJson, dynamicParts);
 
                 ManagerInvoice = JsonConvert.DeserializeObject<ManagerInvoice>(InvoiceJson);
+                ManagerInvoice.InvoiceTotal = InvoiceTotal;
 
                 PartyInfo = new PartyTaxInfo()
                 {
-                    //IdentificationScheme = JsonParser.FindStringByGuid(InvoiceJson, ManagerCustomField.IdentificationScheme, "RefInvoice"),
-                    //IdentificationID = JsonParser.FindStringByGuid(InvoiceJson, ManagerCustomField.IdentificationID, "RefInvoice"),
+                    IdentificationScheme = JsonParser.FindStringByGuid(InvoiceJson, ManagerCustomField.IdentificationScheme, "RefInvoice"),
+                    IdentificationID = JsonParser.FindStringByGuid(InvoiceJson, ManagerCustomField.IdentificationID, "RefInvoice"),
+
                     StreetName = JsonParser.FindStringByGuid(InvoiceJson, ManagerCustomField.StreetName, "RefInvoice"),
                     BuildingNumber = JsonParser.FindStringByGuid(InvoiceJson, ManagerCustomField.BuildingNumber, "RefInvoice"),
                     CitySubdivisionName = JsonParser.FindStringByGuid(InvoiceJson, ManagerCustomField.CitySubdivisionName, "RefInvoice"),
@@ -123,6 +134,34 @@ namespace ZatcaEGS.Models
             }
 
         }
+        
+        private static double ParseTotalValue(string htmlContent)
+        {
+            // Find td element with id='Total'
+            try
+            {
+                string pattern = @"<td[^>]*id=['""]Total['""][^>]*data-value=['""]([^'""]*)['""]";
+                var match = System.Text.RegularExpressions.Regex.Match(htmlContent, pattern);
+
+                if (!match.Success)
+                    return 0;
+
+                // Get the captured data-value
+                string dataValue = match.Groups[1].Value;
+
+                // Parse the value to decimal
+                if (double.TryParse(dataValue, out double result))
+                    return Math.Round(result, 2);
+            }
+            catch
+            {
+                return 0;
+            }
+
+            return 0;
+        }
+
+
     }
 
     public class Currency
@@ -160,8 +199,8 @@ namespace ZatcaEGS.Models
 
     public class TaxCode
     {
-        public string Name { get; set; }
-        public int TaxRate { get; set; }
+        public string Name { get; set; } = "";
+        public int TaxRate { get; set; } = 0;
         public double Rate { get; set; } = 0;
     }
 
@@ -175,6 +214,50 @@ namespace ZatcaEGS.Models
         public double UnitPrice { get; set; } = 0;
         public double DiscountAmount { get; set; } = 0;
         public TaxCode TaxCode { get; set; }
+
+    }
+
+    public class LineValue
+    {
+        public double XmlQty { get; set; } = 0;
+        public double XmlUnitPrice { get; set; } = 0;
+        public double XmlDiscount { get; set; } = 0;
+        public double XmlTaxRate { get; set; } = 0;
+        public double XmlTaxableAmount { get; set; } = 0;
+        public double XmlTaxAmount { get; set; } = 0;
+        public double XmlRoundingAmount { get; set; } = 0;
+
+        public LineValue(Line ln, bool Discount, bool AmountsIncludeTax)
+        {
+            XmlQty = ln.Qty;
+
+            double taxRate = ln.TaxCode?.Rate ?? 0;
+            XmlTaxRate = taxRate > 0 ? taxRate / 100 : 0;
+
+            if (AmountsIncludeTax && XmlTaxRate > 0)
+            {
+                double disc = (Discount && ln.DiscountAmount > 0) ? ln.DiscountAmount / ln.Qty : 0;
+                XmlDiscount = disc > 0 ? Math.Round(disc / (1 + XmlTaxRate), 2) : 0;
+
+                double prc = ln.UnitPrice / (1 + XmlTaxRate);
+
+                XmlUnitPrice = Math.Round(prc - XmlDiscount, 2);
+
+                XmlTaxableAmount = Math.Round(XmlQty * XmlUnitPrice, 2);
+            }
+            else
+            {
+                XmlDiscount = (Discount && ln.DiscountAmount > 0) ? Math.Round(ln.DiscountAmount / ln.Qty, 2) : 0;
+                XmlUnitPrice = Math.Round(ln.UnitPrice - XmlDiscount, 2);
+
+                XmlTaxableAmount = Math.Round(XmlQty * XmlUnitPrice, 2);
+            }
+
+            XmlTaxAmount = Math.Round(XmlTaxableAmount * XmlTaxRate, 2);
+
+            XmlRoundingAmount = XmlTaxableAmount + XmlTaxAmount;
+
+        }
     }
 
     public class RefInvoice
@@ -199,5 +282,9 @@ namespace ZatcaEGS.Models
         public bool Discount { get; set; } = false;
         public bool AmountsIncludeTax { get; set; } = false;
         public CustomFields2 CustomFields2 { get; set; }
+
+        // payable rounding amount
+        public double InvoiceTotal { get; set; }
+
     }
 }
