@@ -184,7 +184,7 @@ namespace ZatcaEGS.Helpers
                     },
                     PartyTaxScheme = new PartyTaxScheme
                     {
-                        CompanyID = _certInfo.EnvironmentType == EnvironmentType.NonProduction ? "399999999900003" : _certInfo.CompanyID,
+                        CompanyID = _certInfo.EnvironmentType == EnvironmentType.NonProduction ? "5900017383" : _certInfo.CompanyID,
                         TaxScheme = new TaxScheme
                         {
                             ID = new ID(_certInfo.TaxSchemeID)
